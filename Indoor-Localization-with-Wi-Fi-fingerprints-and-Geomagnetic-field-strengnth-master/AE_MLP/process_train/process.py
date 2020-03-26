@@ -2,8 +2,8 @@ import pandas  as pd
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.model_selection import  train_test_split
-#file_list = ['XJTLU/Dataset_4thFloor_MIX2.csv', 'XJTLU/Dataset_4thFloor_HuaWei.csv']
-file_list = ['UJIIndoorLoc/trainingData2.csv']
+file_list = ['XJTLU/Dataset_4thFloor_MIX2.csv', 'XJTLU/Dataset_4thFloor_HuaWei.csv']
+#file_list = ['UJIIndoorLoc/trainingData2.csv']
 
 
 def data_process():
