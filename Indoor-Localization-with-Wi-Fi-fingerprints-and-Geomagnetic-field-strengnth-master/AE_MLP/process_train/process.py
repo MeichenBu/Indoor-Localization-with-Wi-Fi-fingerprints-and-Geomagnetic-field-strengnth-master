@@ -25,10 +25,10 @@ def XJTLU(data_size = 516):
     arr = np.asarray(df)
     AP = arr[:, 0:data_size]
     x_all = arr[:, data_size:data_size+1]
-    y_all = arr[:, data_size:]
+    y_all = arr[:, data_size+1:]
     labels = np.zeros(x_all.shape[0])
     for i in range(0, x_all.shape[0]):
-        labels[i] = (y_all[i] * 51 + x_all[i] + 1)
+        labels[i] = (y_all[i]*51 + x_all[i] + 1)
     onehot_encoder = OneHotEncoder()
     train_labels = onehot_encoder.fit_transform(labels.reshape(x_all.shape[0], 1)).toarray()
     scaler = StandardScaler()

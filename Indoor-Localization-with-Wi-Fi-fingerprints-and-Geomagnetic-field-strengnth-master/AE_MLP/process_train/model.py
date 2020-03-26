@@ -39,7 +39,8 @@ CLASSIFIER_ACTIVATION = 'relu'
 CLASSIFIER_BIAS = False
 CLASSIFIER_OPTIMIZER = 'adam'
 CLASSIFIER_LOSS = 'categorical_crossentropy'
-hidden_nodes = 8*8
+
+hidden_nodes = 16*16
 size = int(np.sqrt(hidden_nodes))
 
 def param():
@@ -138,7 +139,7 @@ def build_model(sae_hidden_layers, INPUT_DIM, SAE_ACTIVATION, SAE_BIAS, SAE_OPTI
     model.compile(optimizer=SAE_OPTIMIZER, loss=SAE_LOSS, metrics=['acc'])
 
     # train the model
-    model.fit(RSS_train, RSS_train, batch_size=batch_size, epochs= 50, verbose=VERBOSE, shuffle=True, validation_data=(RSS_val, RSS_val))
+    model.fit(RSS_train, RSS_train, batch_size=batch_size, epochs= 200, verbose=VERBOSE, shuffle=True, validation_data=(RSS_val, RSS_val))
     # remove the decoder part
     num_to_remove = (len(sae_hidden_layers) + 1) // 2
     for i in range(num_to_remove):
@@ -213,7 +214,26 @@ if __name__ == "__main__":
 
     history = model_AE_CNN.fit(RSS_train, y_train, batch_size=batch_size, epochs=200, verbose=1, validation_data=(RSS_val, y_val), shuffle=True)
     result = pd.DataFrame(history.history)
-    result.to_csv(str(size) + '_acc_loss.csv')
+    result.to_csv('XJTLU'+ str(size) + '_acc_loss.csv')
+
+    plt.figure()
+    acc = history.history['categorical_accuracy']
+    val_acc = history.history['val_categorical_accuracy']
+    loss = history.history['loss']
+    val_loss = history.history['val_loss']
+    epoch = range(len(acc))
+    plt.plot(epoch, acc, 'y', label='Training acc')
+    plt.plot(epoch, val_acc, 'b', label='Validation acc')
+    plt.title('Training and validation accuracy')
+    plt.legend()
+
+    plt.figure()
+    plt.plot(epoch, loss, 'y', label='Training loss')
+    plt.plot(epoch, val_loss, 'b', label='Validation loss')
+    plt.title('Training and validation loss')
+    plt.legend()
+
+    plt.show()
 
     del model_AE
     del model_CNN
