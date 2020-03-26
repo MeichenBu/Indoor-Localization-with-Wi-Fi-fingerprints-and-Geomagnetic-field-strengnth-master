@@ -1,9 +1,3 @@
-"""
-This file is the combination of RSS data and Geomagnetic field data
-
-"""
-
-
 from keras.layers import BatchNormalization
 from keras.callbacks import ReduceLROnPlateau
 import pandas as pd
