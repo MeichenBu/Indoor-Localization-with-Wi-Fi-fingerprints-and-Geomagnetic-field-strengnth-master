@@ -3,18 +3,18 @@ import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 
-file_list = ['XJTLU/Dataset_4thFloor_MIX2.csv', 'XJTLU/Dataset_4thFloor_HuaWei.csv']
+# file_list = ['XJTLU/Dataset_4thFloor_MIX2.csv', 'XJTLU/Dataset_4thFloor_HuaWei.csv']
+file_list = ['UJIIndoorLoc/trainingData2.csv']
 
-
-# file_list = ['UJIIndoorLoc/trainingData2.csv']
 
 def data_process():
     if len(file_list) == 1:
         select_AP, select_label, dataset_name = UJI()
     else:
         select_AP, select_label, dataset_name = XJTLU()
-    x_train, x_test, y_train, y_test = train_test_split(select_AP, select_label, test_size=0.2, random_state=42)
-    return [x_train, x_test, y_train, y_test, dataset_name]
+    x_trainval, x_test, y_trainval, y_test = train_test_split(select_AP, select_label, test_size=0.1, random_state=42)
+    x_train, x_val, y_train, y_val = train_test_split(x_trainval, y_trainval, test_size=0.11, random_state=42)
+    return [x_trainval, y_trainval, x_train, y_train, x_val, y_val, x_test, y_test, dataset_name]
 
 
 def XJTLU(data_size=516):
