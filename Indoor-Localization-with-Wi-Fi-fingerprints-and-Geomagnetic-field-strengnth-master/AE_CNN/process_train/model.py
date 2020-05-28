@@ -1,29 +1,30 @@
-import os
-import pandas as pd
 import argparse
+import os
+
 import numpy as np
-from tensorflow.keras import regularizers, optimizers, metrics
+import pandas as pd
 import tensorflow.keras.backend as backend
-from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras import regularizers, optimizers, metrics
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.layers import Input, Reshape, BatchNormalization, Conv2D, MaxPooling2D, Dense, Dropout, \
     Activation, Flatten
 from tensorflow.keras.losses import categorical_crossentropy
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
+from tensorflow.keras.models import Sequential, Model
 from tensorflow.python.framework import ops
+from tensorflow.keras.optimizers import Adam
 from process import data_process
-from tensorflow.keras.callbacks import TensorBoard
+
 # import matplotlib.pyplot as plt
 
-tensorboard = TensorBoard(log_dir='./newlogs', histogram_freq=1, write_graph=True, write_images=True)
+#tensorboard = TensorBoard(log_dir='./newlogs', histogram_freq=1, write_graph=True, write_images=True)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=2)
-
 EARLYSTOP = 0
 l1 = regularizers.l1(0.0)
 l2 = regularizers.l2(0.01)
 regilization = l1
 VERBOSE = 2  # 0 for turning off logging
-BATCHSIZE = 512
 # ------------------------------------------------------------------------
 # stacked auto encoder (sae)
 # ------------------------------------------------------------------------
@@ -33,7 +34,7 @@ SAE_BIAS = False
 SAE_OPTIMIZER = 'adam'
 SAE_LOSS = 'mse'
 SAE_EPOCH = 100
-SAE_BATCHSIZE = 512
+SAE_BATCHSIZE = 1024
 # ------------------------------------------------------------------------
 # CNN
 # ------------------------------------------------------------------------
@@ -42,8 +43,11 @@ CNN_BIAS = False
 LOSS = categorical_crossentropy
 EPOCH = 100
 OPTIMIZER = 'adam'
-CNN_BATCHSIZE = 512
-
+CNN_BATCHSIZE = 1024
+filter1 = 34
+filter2 = 64
+dropout = 0.1
+learning_rate = 0.0005
 
 def param():
     parser = argparse.ArgumentParser()
@@ -134,11 +138,21 @@ def param():
 
 # create the autoencoder
 def build_AE(sae_hidden_layers, INPUT_DIM, SAE_ACTIVATION, SAE_BIAS, SAE_OPTIMIZER, SAE_LOSS, SAE_BATCHSIZE):
-    sae_reduce_lr = ReduceLROnPlateau(optimizer=SAE_OPTIMIZER, monitor='val_loss', patience=10, factor=0.5, mode='min', min_lr=1e-5)
+    sae_reduce_lr = ReduceLROnPlateau(optimizer=SAE_OPTIMIZER, monitor='val_loss', patience=10, factor=0.5, mode='min',
+                                      min_lr=1e-5)
     model = Sequential()
+    # model.add(Dense(sae_hidden_layers[0], input_dim=INPUT_DIM, activity_regularizer=regilization))
+    # model.add(BatchNormalization())
+    # model.add(Activation('relu'))
     model.add(Dense(sae_hidden_layers[0], input_dim=INPUT_DIM, activation=SAE_ACTIVATION, use_bias=SAE_BIAS))
     for units in sae_hidden_layers[1:]:
         model.add(Dense(units, activation=SAE_ACTIVATION, activity_regularizer=regilization, use_bias=SAE_BIAS, ))
+        # model.add(Dense(units,activity_regularizer=regilization))
+        # model.add(BatchNormalization())
+        # model.add(Activation('relu'))
+    # model.add(Dense(INPUT_DIM, activity_regularizer=regilization))
+    # model.add(BatchNormalization())
+    # model.add(Activation('relu'))
     model.add(Dense(INPUT_DIM, activation=SAE_ACTIVATION, use_bias=SAE_BIAS))
     model.compile(optimizer=SAE_OPTIMIZER, loss=SAE_LOSS, metrics=['acc'])
     # train the model
@@ -147,9 +161,10 @@ def build_AE(sae_hidden_layers, INPUT_DIM, SAE_ACTIVATION, SAE_BIAS, SAE_OPTIMIZ
                   validation_data=(x_val, x_val), callbacks=[early_stopping])
     else:
         model.fit(x_train, x_train, batch_size=SAE_BATCHSIZE, epochs=SAE_EPOCH, verbose=VERBOSE, shuffle=True,
-                  validation_data=(x_val, x_val), callbacks = [sae_reduce_lr])
+                  validation_data=(x_val, x_val), callbacks=[sae_reduce_lr])
     # remove the decoder part
     num_to_remove = (len(sae_hidden_layers) + 1) // 2
+    # num_to_remove = 6
     for i in range(num_to_remove):
         model.pop()
     model.add(Dropout(rate=dropout))
@@ -160,10 +175,10 @@ def build_AE(sae_hidden_layers, INPUT_DIM, SAE_ACTIVATION, SAE_BIAS, SAE_OPTIMIZ
 def build_CNN(OUTPUT_DIM):
     AE_output = Input(shape=(SIZE, SIZE, 1))
     x = AE_output
-    x = Conv2D(64, (3, 3))(x)
+    x = Conv2D(filter1, (3, 3))(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
-    x = Conv2D(32, (3, 3))(x)
+    x = Conv2D(filter2, (3, 3))(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
     x = MaxPooling2D(pool_size=(2, 2))(x)
@@ -185,26 +200,24 @@ def combine_models(model_AE, model_CNN):
     CNN_input = Reshape((SIZE, SIZE, 1))(AE_out)
     CNN_output = model_CNN(CNN_input)
     model_AE_CNN = Model(outputs=CNN_output, inputs=x_train)
-    model_AE_CNN.compile(loss=LOSS, optimizer=OPTIMIZER, metrics=[metrics.categorical_accuracy])
+    model_AE_CNN.compile(loss=LOSS, optimizer=Adam(lr=learning_rate), metrics=[metrics.categorical_accuracy])
     return model_AE_CNN
 
 
 def train_AE_CNN(model_AE_CNN, model_AE):
-    #optimizer = optimizers.Adam(lr=0.001, beta_1=0.99999, beta_2=0.999, epsilon=1e-09)
-    optimizer = optimizers.Adam(lr = 0.001)
-    reduce_lr = ReduceLROnPlateau(optimizer=optimizer, monitor='val_loss', patience=10, factor=LR_REDUCE_FACTOR, mode='min', min_lr=1e-9)
+    #optimizer = optimizers.Adam(lr=0.0001)
+    # reduce_lr = ReduceLROnPlateau(optimizer=optimizer, monitor='val_loss', patience=10, factor=LR_REDUCE_FACTOR, mode='min', min_lr=1e-9)
     AE_output = model_AE.predict(x_test)
     output_path = root_folder + "//AE_output//pre//test//" + str(SIZE) + ".csv"
 
     pd.DataFrame(AE_output).to_csv(output_path)
 
     if EARLYSTOP is 1:
-        history = model_AE_CNN.fit(x_train, y_train, batch_size=BATCHSIZE, epochs=EPOCH, verbose=VERBOSE,
+        history = model_AE_CNN.fit(x_train, y_train, batch_size=CNN_BATCHSIZE, epochs=EPOCH, verbose=VERBOSE,
                                    validation_data=(x_val, y_val), shuffle=True, callbacks=[early_stopping])
     else:
-        history = model_AE_CNN.fit(x_train, y_train, batch_size=BATCHSIZE, epochs=EPOCH, verbose=VERBOSE,
-                                   validation_data=(x_val, y_val), shuffle=True,
-                                   callbacks=[reduce_lr])
+        history = model_AE_CNN.fit(x_train, y_train, batch_size=CNN_BATCHSIZE, epochs=EPOCH, verbose=VERBOSE,
+                                   validation_data=(x_val, y_val), shuffle=True)
     AE_output = model_AE.predict(x_test)
     output_path = root_folder + "//AE_output//after//test//" + str(SIZE) + ".csv"
     pd.DataFrame(AE_output).to_csv(output_path)
@@ -213,13 +226,13 @@ def train_AE_CNN(model_AE_CNN, model_AE):
     for i in range(0, AE_CNN_output.shape[0]):
         if np.argmax(AE_CNN_output, axis=1)[i] == np.argmax(y_test, axis=1)[i]:
             hit_num += 1
-            #true_index.append(i)
-        #else:
-            #false_index.append(i)
+            # true_index.append(i)
+        # else:
+        # false_index.append(i)
     hr = hit_num / AE_CNN_output.shape[0]
     hr_ls.append(hr)
-    del optimizer
-    del reduce_lr
+    #del optimizer
+    #del reduce_lr
     return history
 
 
@@ -255,20 +268,20 @@ if __name__ == "__main__":
     # pd.DataFrame(x_test).to_csv('preprocessed_data//' + 'test' + '_' + '.csv')
 
     for dropout in [0.1]:
-        for LR_REDUCE_FACTOR in [0.05, 0.1, 0.5, 0.9]:
+        #for LR_REDUCE_FACTOR in [0.05, 0.1, 0.5, 0.9]:
+        for LR_REDUCE_FACTOR in [1]:
             hr_ls = []
             for SIZE in range(6, 23, 2):
                 root_folder = 'd' + str(dropout) + 'f' + str(LR_REDUCE_FACTOR) + '//' + str(
                     SIZE) + 'x' + str(SIZE)
-                #true_index = []
-                #false_index = []
+                # true_index = []
+                # false_index = []
                 sae_hidden_layers = [int(i) for i in args.sae_hidden_layers.split(',')]
-                sae_hidden_layers[1] = SIZE*SIZE
+                sae_hidden_layers[1] = SIZE * SIZE
                 model_AE = build_AE(sae_hidden_layers, INPUT_DIM, SAE_ACTIVATION, SAE_BIAS, SAE_OPTIMIZER, SAE_LOSS,
                                     SAE_BATCHSIZE)
                 model_CNN = build_CNN(OUTPUT_DIM)
                 model_AE_CNN = combine_models(model_AE, model_CNN)
-
                 history = train_AE_CNN(model_AE_CNN, model_AE)
                 result = pd.DataFrame(history.history)
                 result.to_csv(root_folder + '//acc_loss_result//' + dataset_name + '_' + str(SIZE) + '_acc_loss.csv')
@@ -283,9 +296,9 @@ if __name__ == "__main__":
                 ops.reset_default_graph()
             name = ['hitting_rate']
             hr_df = pd.DataFrame(columns=name, data=hr_ls)
-            dir = os.path.join(current_dir, "d" + str(dropout) + '_' + "f" + str(LR_REDUCE_FACTOR) + '_' +'test_acc' + '.csv')
+            dir = os.path.join(current_dir,
+                               "d" + str(dropout) + '_' + "f" + str(LR_REDUCE_FACTOR) + '_' + 'test_acc' + '.csv')
             hr_df.to_csv(dir)
-
 
     # ------------------------------------------------------------------------
     # plot acc and loss curves
